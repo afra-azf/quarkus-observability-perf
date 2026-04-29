@@ -207,24 +207,98 @@ scripts:
 
   # Benchmark run --------------------------------------------------------------------------------------------------------------
 
+  #Perf param change starts 
+ 
   run-observability-perf:
-    - script: sdk-select-jdk
-    - set-state: RUN.CURRENT_BULD quarkus-extension
-    - set-state: RUN.CURRENT_IMPLEMENTATION observability-off
-    - sleep: 15s # allow for monitoring and profiling to startup
-    - script: run-benchmark-server
-    - set-state: RUN.CURRENT_IMPLEMENTATION observability-on
-    - sleep: 15s # allow for monitoring and profiling to restart
-    - script: run-benchmark-server
-    - set-state: RUN.CURRENT_BULD quarkus
-    - set-state: RUN.CURRENT_IMPLEMENTATION observability-disabled
-    - sleep: 15s # allow for monitoring and profiling to restart
-    - script: run-benchmark-server
-    - set-state: RUN.CURRENT_BULD quarkus
-    - set-state: RUN.CURRENT_IMPLEMENTATION observability-agent
-    - sleep: 15s # allow for monitoring and profiling to restart
-    - script: run-benchmark-server
-    - signal: BENCHMARK_DONE
+  - script: sdk-select-jdk
+
+  # Log input
+  - log: "PERF_SCENARIOS=${{PERF_SCENARIOS}}"
+
+  # Empty → fallback to default
+  - read-state: ${{PERF_SCENARIOS}}
+    then:
+      - regex: ^$
+        then:
+          - log: "PERF_SCENARIOS empty → using default scenarios"
+          - set-state: PERF_SCENARIOS observability-off,observability-on,observability-disabled,observability-agent
+
+  # Validation (strict)
+  - read-state: ${{PERF_SCENARIOS}}
+    then:
+      - regex: ^(observability-(off|on|disabled|agent))(, *observability-(off|on|disabled|agent))*$
+        else:
+          - abort: Invalid PERF_SCENARIOS value. Allowed values: observability-off, observability-on, observability-disabled, observability-agent
+
+  # Convert input -> queue (preserve order)
+  - set-state: SCENARIO_QUEUE []
+  - set-state: SCENARIOS_DONE false
+
+  - read-state: ${{PERF_SCENARIOS}}
+    then:
+      - js: |
+          (input, state) => {
+            state.SCENARIO_QUEUE = input.split(",").map(s => s.trim());
+          }
+
+  # Execution loop (input order)
+  - repeat-until: SCENARIOS_DONE
+    then:
+
+      # Pop next scenario
+      - read-state: SCENARIO_QUEUE
+        then:
+          - js: |
+              (input, state) => {
+                if (!input || input.length === 0) {
+                  state.SCENARIOS_DONE = true;
+                } else {
+                  state.CURRENT_SCENARIO = input.shift();
+                  state.SCENARIO_QUEUE = input;
+                }
+              }
+
+      # Exit loop if done
+      - read-state: ${{SCENARIOS_DONE}}
+        then:
+          - regex: true
+            then:
+              - break: true
+
+      # Logging
+      - log: "Running scenario: ${{CURRENT_SCENARIO}}"
+
+      # Map scenario → configuration
+      - read-state: ${{CURRENT_SCENARIO}}
+        then:
+          - regex: ^observability-off$
+            then:
+              - set-state: RUN.CURRENT_BULD quarkus-extension
+              - set-state: RUN.CURRENT_IMPLEMENTATION observability-off
+
+          - regex: ^observability-on$
+            then:
+              - set-state: RUN.CURRENT_BULD quarkus-extension
+              - set-state: RUN.CURRENT_IMPLEMENTATION observability-on
+
+          - regex: ^observability-disabled$
+            then:
+              - set-state: RUN.CURRENT_BULD quarkus
+              - set-state: RUN.CURRENT_IMPLEMENTATION observability-disabled
+
+          - regex: ^observability-agent$
+            then:
+              - set-state: RUN.CURRENT_BULD quarkus
+              - set-state: RUN.CURRENT_IMPLEMENTATION observability-agent
+
+      # Execute benchmark
+      - sleep: 15s
+      - script: run-benchmark-server
+
+  # Completion signal
+  - signal: BENCHMARK_DONE 
+
+  #Perf param change ends 
 
   run-benchmark-server:
     - sh: cd ${{WORKDIR}}/observability-perf/${{CURRENT_BULD}}-benchmark
@@ -487,6 +561,9 @@ states:
 
   # Other options
   SERVER_OPTS:
+
+  # Benchmark control
+  PERF_SCENARIOS: observability-off,observability-on,observability-disabled,observability-agent
 
   # Results
   BENCHMARK_IMPLEMENTATION: []
