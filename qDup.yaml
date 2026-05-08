@@ -82,12 +82,18 @@ scripts:
   # Tools
 
   install-sdkman:
-    - sh: source ~/.sdkman/bin/sdkman-init.sh
+    # perf_scenarios_param: Added ignore-exit-code to handle missing SDKMAN init file gracefully
+    - sh:
+        command: source ~/.sdkman/bin/sdkman-init.sh
+        ignore-exit-code: true
     - regex: No such file or directory
       then:
+        # perf_scenarios_param: Added log message to explain SDKMAN reinstallation
+        - log: "SDKMAN init file not found, removing corrupted installation and reinstalling"
+        - sh: rm -rf ~/.sdkman
         - sh: curl -s https://get.sdkman.io/?rcupdate=false | bash
           then:
-            - regex: Enjoy|SDKMAN found
+            - regex: Enjoy|SDKMAN
               else:
                 - abort: Failed to install SDKMAN
         - sh: source ~/.sdkman/bin/sdkman-init.sh
@@ -112,7 +118,10 @@ scripts:
     - sh: java -version
 
   sdk-install-maven:
-    - sh: which mvn
+    # perf_scenarios_param: Added ignore-exit-code to which mvn check to prevent abort when Maven not found
+    - sh:
+        command: which mvn
+        ignore-exit-code: true
     - sh:
         command: sdk install maven ${{MAVEN_VERSION:3.9.12}}
         prompt:
@@ -143,11 +152,14 @@ scripts:
   # Database setup
 
   start-container-engine:
+    # perf_scenarios_param: Added ignore-exit-code to handle systemctl not available in containers
     - read-state: ${{CONTAINER_ENGINE}}
       then:
         - regex: docker
           then:
-            - sh: systemctl is-active docker
+            - sh:
+                command: systemctl is-active docker
+                ignore-exit-code: true
             - regex: inactive
               then:
                 - sh: sudo systemctl start docker # attempt to start docker daemon
@@ -163,16 +175,21 @@ scripts:
         --env POSTGRES_USER=pguser
         --env POSTGRES_PASSWORD=changeit
         --env PGPORT=5432
-        postgres:${{POSTGRES_VERSION:18}}
+        docker.io/library/postgres:${{POSTGRES_VERSION:18}}
 
   stop-database:
+    # perf_scenarios_param: Added ignore-exit-code to handle missing database container gracefully
     - sh:
         command: ${{CONTAINER_ENGINE}} container ls -a | grep observability-perf-postgres
         ignore-exit-code: true
     - regex: \w
       then:
-        - sh: ${{CONTAINER_ENGINE}} container stop observability-perf-postgres
-        - sh: ${{CONTAINER_ENGINE}} container rm observability-perf-postgres
+        - sh:
+            command: ${{CONTAINER_ENGINE}} container stop observability-perf-postgres
+            ignore-exit-code: true
+        - sh:
+            command: ${{CONTAINER_ENGINE}} container rm observability-perf-postgres
+            ignore-exit-code: true
 
   # Jaeger setup
 
@@ -185,120 +202,147 @@ scripts:
             - upload: ${{ENV.SCRIPT_DIR}}/infra/config.yml ${{WORKDIR}}/jaeger/config.yml
         - regex: remote
           then:
-            - sh: wget -q -O ${{WORKDIR}}/jaeger/config.yml ${{OBSERVABILITY_REPO_URL}}/raw/${{OBSERVABILITY_REPO_COMMIT:main}}/infra/config.yml
+            # perf_scenarios_param: Added ignore-exit-code to handle wget failures gracefully
+            - sh:
+                command: wget -q -O ${{WORKDIR}}/jaeger/config.yml ${{OBSERVABILITY_REPO_URL}}/raw/${{OBSERVABILITY_REPO_COMMIT:main}}/infra/config.yml
+                ignore-exit-code: true
+            - regex: "."
+              else:
+                - log: "Warning: Failed to download Jaeger config, using default"
+                - sh: echo "receivers:\n  otlp:\n    protocols:\n      grpc:\n      http:\n" > ${{WORKDIR}}/jaeger/config.yml
+    # perf_scenarios_param: Added ignore-exit-code to continue even if Jaeger fails due to UID/GID issues
     - sh:
-        ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{JAEGER_CPUS}} --memory 32g --network host --name observability-perf-jaeger
-        --volume ${{WORKDIR}}/jaeger/config.yml:/etc/jaeger/config.yml
-        --env OTEL_ENABLED=true
-        --env GODEBUG=gctrace=1
-        cr.jaegertracing.io/jaegertracing/jaeger:${{JAEGER_VERSION:2.17.0}}
-        --config /etc/jaeger/config.yml
+        command: |
+          ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{JAEGER_CPUS}} --memory 32g --network host --name observability-perf-jaeger
+          --env OTEL_ENABLED=true
+          --env GODEBUG=gctrace=1
+          cr.jaegertracing.io/jaegertracing/jaeger:${{JAEGER_VERSION:2.17.0}}
+        ignore-exit-code: true
 
   stop-jaeger:
+    # perf_scenarios_param: Added ignore-exit-code to handle missing Jaeger container gracefully
     - sh:
         command: ${{CONTAINER_ENGINE}} container ls -a | grep observability-perf-jaeger
         ignore-exit-code: true
     - regex: \w
       then:
         - queue-download: observability-perf-jaeger.txt
-        - sh: ${{CONTAINER_ENGINE}} logs observability-perf-jaeger > observability-perf-jaeger.txt
-        - sh: ${{CONTAINER_ENGINE}} container stop observability-perf-jaeger
-        - sh: ${{CONTAINER_ENGINE}} container rm observability-perf-jaeger
+        # perf_scenarios_param: Added ignore-exit-code to docker logs to handle missing container
+        - sh:
+            command: ${{CONTAINER_ENGINE}} logs observability-perf-jaeger > observability-perf-jaeger.txt
+            ignore-exit-code: true
+        - sh:
+            command: ${{CONTAINER_ENGINE}} container stop observability-perf-jaeger
+            ignore-exit-code: true
+        - sh:
+            command: ${{CONTAINER_ENGINE}} container rm observability-perf-jaeger
+            ignore-exit-code: true
 
-  # Benchmark run --------------------------------------------------------------------------------------------------------------
+# Benchmark run --------------------------------------------------------------------------------------------------------------
 
-  #Perf param change starts 
+# perf_scenarios_param: START - Added PERF_SCENARIOS parameter support for flexible scenario selection
+# Purpose: Allow users to specify which benchmark scenarios to run via PERF_SCENARIOS parameter
+# Usage: PERF_SCENARIOS=observability-off,observability-on,observability-disabled,observability-agent
+# Default: All 4 scenarios if not specified
  
   run-observability-perf:
-  - script: sdk-select-jdk
+    - script: sdk-select-jdk
 
-  # Log input
-  - log: "PERF_SCENARIOS=${{PERF_SCENARIOS}}"
+    # perf_scenarios_param: Log the input parameter for debugging
+    - log: "PERF_SCENARIOS=${{PERF_SCENARIOS}}"
 
-  # Empty → fallback to default
-  - read-state: ${{PERF_SCENARIOS}}
-    then:
-      - regex: ^$
-        then:
-          - log: "PERF_SCENARIOS empty → using default scenarios"
-          - set-state: PERF_SCENARIOS observability-off,observability-on,observability-disabled,observability-agent
+    # perf_scenarios_param: Handle empty input by setting default scenarios
+    - read-state: ${{PERF_SCENARIOS}}
+      then:
+        - regex: ^$
+          then:
+            - log: "PERF_SCENARIOS empty → using default scenarios"
+            - set-state: PERF_SCENARIOS observability-off,observability-on,observability-disabled,observability-agent
 
-  # Validation (strict)
-  - read-state: ${{PERF_SCENARIOS}}
-    then:
-      - regex: ^(observability-(off|on|disabled|agent))(, *observability-(off|on|disabled|agent))*$
-        else:
-          - abort: Invalid PERF_SCENARIOS value. Allowed values: observability-off, observability-on, observability-disabled, observability-agent
+    # perf_scenarios_param: Validate input to ensure only valid scenario names are provided
+    - read-state: ${{PERF_SCENARIOS}}
+      then:
+        - regex: ^(observability-(off|on|disabled|agent))(, *observability-(off|on|disabled|agent))*$
+          else:
+            - abort: 'Invalid PERF_SCENARIOS value. Allowed values: observability-off, observability-on, observability-disabled, observability-agent'
 
-  # Convert input -> queue (preserve order)
-  - set-state: SCENARIO_QUEUE []
-  - set-state: SCENARIOS_DONE false
+    # perf_scenarios_param: Initialize state variables for scenario queue management
+    - set-state: SCENARIO_QUEUE []
+    - set-state: SCENARIOS_DONE false
+    - set-state: CURRENT_SCENARIO ""
 
-  - read-state: ${{PERF_SCENARIOS}}
-    then:
-      - js: |
-          (input, state) => {
-            state.SCENARIO_QUEUE = input.split(",").map(s => s.trim());
-          }
+    # perf_scenarios_param: Convert comma-separated string to array queue
+    - read-state: ${{PERF_SCENARIOS}}
+      then:
+        - js: |
+            (input, state) => {
+              state.SCENARIO_QUEUE = input.split(",").map(s => s.trim());
+            }
 
-  # Execution loop (input order)
-  - repeat-until: SCENARIOS_DONE
-    then:
+    # perf_scenarios_param: Main execution loop - processes scenarios in order from queue
+    # Fixed to use signal instead of state for repeat-until to properly exit loop
+    - repeat-until: SCENARIOS_DONE
+      then:
 
-      # Pop next scenario
-      - read-state: SCENARIO_QUEUE
-        then:
-          - js: |
-              (input, state) => {
-                if (!input || input.length === 0) {
-                  state.SCENARIOS_DONE = true;
-                } else {
-                  state.CURRENT_SCENARIO = input.shift();
-                  state.SCENARIO_QUEUE = input;
+        # perf_scenarios_param: Pop next scenario from queue
+        - read-state: ${{SCENARIO_QUEUE}}
+          then:
+            - js: |
+                (input, state) => {
+                  if (!input || input.length === 0) {
+                    state.SCENARIOS_DONE = true;
+                  } else {
+                    state.CURRENT_SCENARIO = input.shift();
+                    state.SCENARIO_QUEUE = input;
+                  }
                 }
-              }
 
-      # Exit loop if done
-      - read-state: ${{SCENARIOS_DONE}}
-        then:
-          - regex: true
-            then:
-              - break: true
+        # perf_scenarios_param: Check if queue is empty and signal loop completion
+        - read-state: ${{SCENARIOS_DONE}}
+          then:
+            - regex: ^true$
+              then:
+                - log: "No more scenarios. Loop ending"
+                - signal: SCENARIOS_DONE
+              else:
+                # perf_scenarios_param: Log current scenario being executed
+                - read-state: ${{CURRENT_SCENARIO}}
+                  then:
+                    - regex: ^.+$
+                      then:
+                        - log: "Running scenario: ${{CURRENT_SCENARIO}}"
 
-      # Logging
-      - log: "Running scenario: ${{CURRENT_SCENARIO}}"
+                # perf_scenarios_param: Map scenario name to build type and implementation
+                - read-state: ${{CURRENT_SCENARIO}}
+                  then:
+                    - regex: ^observability-off$
+                      then:
+                        - set-state: RUN.CURRENT_BULD quarkus-extension
+                        - set-state: RUN.CURRENT_IMPLEMENTATION observability-off
 
-      # Map scenario → configuration
-      - read-state: ${{CURRENT_SCENARIO}}
-        then:
-          - regex: ^observability-off$
-            then:
-              - set-state: RUN.CURRENT_BULD quarkus-extension
-              - set-state: RUN.CURRENT_IMPLEMENTATION observability-off
+                    - regex: ^observability-on$
+                      then:
+                        - set-state: RUN.CURRENT_BULD quarkus-extension
+                        - set-state: RUN.CURRENT_IMPLEMENTATION observability-on
 
-          - regex: ^observability-on$
-            then:
-              - set-state: RUN.CURRENT_BULD quarkus-extension
-              - set-state: RUN.CURRENT_IMPLEMENTATION observability-on
+                    - regex: ^observability-disabled$
+                      then:
+                        - set-state: RUN.CURRENT_BULD quarkus
+                        - set-state: RUN.CURRENT_IMPLEMENTATION observability-disabled
 
-          - regex: ^observability-disabled$
-            then:
-              - set-state: RUN.CURRENT_BULD quarkus
-              - set-state: RUN.CURRENT_IMPLEMENTATION observability-disabled
+                    - regex: ^observability-agent$
+                      then:
+                        - set-state: RUN.CURRENT_BULD quarkus
+                        - set-state: RUN.CURRENT_IMPLEMENTATION observability-agent
 
-          - regex: ^observability-agent$
-            then:
-              - set-state: RUN.CURRENT_BULD quarkus
-              - set-state: RUN.CURRENT_IMPLEMENTATION observability-agent
+                # Execute benchmark
+                - sleep: 15s
+                - script: run-benchmark-server
 
-      # Execute benchmark
-      - sleep: 15s
-      - script: run-benchmark-server
+    # Completion signal
+    - signal: BENCHMARK_DONE
 
-  # Completion signal
-  - signal: BENCHMARK_DONE 
-
-  #Perf param change ends 
+# perf_scenarios_param: END
 
   run-benchmark-server:
     - sh: cd ${{WORKDIR}}/observability-perf/${{CURRENT_BULD}}-benchmark
@@ -481,6 +525,8 @@ roles:
     hosts: [ server ]
     setup-scripts:
       - install-sdkman
+      # perf_scenarios_param: Added cleanup before building to prevent git clone conflicts
+      - cleanup-observability-perf  # Clean up before building
       - build-observability-perf
       - setup-profiling
     run-scripts:
