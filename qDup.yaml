@@ -277,7 +277,7 @@ scripts:
 
     # perf_scenarios_param: Main execution loop - processes scenarios in order from queue
     # Fixed to use signal instead of state for repeat-until to properly exit loop
-    - repeat-until: BENCHMARK_DONE
+    - repeat-until: SCENARIOS_DONE
       then:
 
         # perf_scenarios_param: Pop next scenario from queue
@@ -292,7 +292,6 @@ scripts:
                     state.SCENARIO_QUEUE = input;
                   }
                 }
-            - signal: BENCHMARK_DONE
 
         # perf_scenarios_param: Check if queue is empty and signal loop completion
         - read-state: ${{SCENARIOS_DONE}}
@@ -300,8 +299,7 @@ scripts:
             - regex: ^true$
               then:
                 - log: "No more scenarios. Loop ending"
-                - signal: BENCHMARK_DONE
-                
+                - signal: SCENARIOS_DONE
               else:
                 # perf_scenarios_param: Log current scenario being executed
                 - read-state: ${{CURRENT_SCENARIO}}
