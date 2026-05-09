@@ -212,11 +212,7 @@ scripts:
                 - sh: echo "receivers:\n  otlp:\n    protocols:\n      grpc:\n      http:\n" > ${{WORKDIR}}/jaeger/config.yml
     # perf_scenarios_param: Added ignore-exit-code to continue even if Jaeger fails due to UID/GID issues
     - sh:
-        command: |
-          ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{JAEGER_CPUS}} --memory 32g --network host --name observability-perf-jaeger
-          --env OTEL_ENABLED=true
-          --env GODEBUG=gctrace=1
-          cr.jaegertracing.io/jaegertracing/jaeger:${{JAEGER_VERSION:2.17.0}}
+        command: ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{JAEGER_CPUS}} --memory 32g --network host --name observability-perf-jaeger --volume ${{WORKDIR}}/jaeger/config.yml:/etc/jaeger/config.yml --env OTEL_ENABLED=true --env GODEBUG=gctrace=1 cr.jaegertracing.io/jaegertracing/jaeger:${{JAEGER_VERSION:2.17.0}} --config /etc/jaeger/config.yml
         ignore-exit-code: true
 
   stop-jaeger:
