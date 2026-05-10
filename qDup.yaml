@@ -242,9 +242,7 @@ scripts:
 # Default: All 4 scenarios if not specified
  
   run-observability-perf:
-    # TEST MODE: Skip SDK selection
-    # - script: sdk-select-jdk
-    - log: "TEST MODE: Skipping SDK selection"
+    - script: sdk-select-jdk
 
     # perf_scenarios_param: Log the input parameter for debugging
     - log: "PERF_SCENARIOS=${{PERF_SCENARIOS}}"
@@ -333,14 +331,9 @@ scripts:
                         - set-state: RUN.CURRENT_BULD quarkus
                         - set-state: RUN.CURRENT_IMPLEMENTATION observability-agent
 
-                # Execute benchmark - COMMENTED OUT FOR TESTING
-                # - sleep: 15s
-                # - script: run-benchmark-server
-                
-                # TEST: Just echo the scenario details
-                - log: "TEST MODE: Would execute scenario ${{CURRENT_SCENARIO}}"
-                - log: "TEST MODE: BUILD=${{RUN.CURRENT_BULD}}, IMPLEMENTATION=${{RUN.CURRENT_IMPLEMENTATION}}"
-                - sleep: 2s
+                # Execute benchmark
+                - sleep: 15s
+                - script: run-benchmark-server
 
     # Completion signal
     - signal: BENCHMARK_DONE
