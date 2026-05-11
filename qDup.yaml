@@ -1,393 +1,208 @@
 name: Build and run Quarkus observability benchmark
 scripts:
-scripts:
+
 # Benchmark setup ------------------------------------------------------------------------------------------------------------
-# Benchmark setup ------------------------------------------------------------------------------------------------------------
-  build-observability-perf:
+
   build-observability-perf:
     - script: sdk-select-jdk
-    - script: sdk-select-jdk
-    - sh: mkdir -p ${{WORKDIR}}/observability-perf
     - sh: mkdir -p ${{WORKDIR}}/observability-perf
     - read-state: ${{BUILD_TYPE}}
-    - read-state: ${{BUILD_TYPE}}
-      then:
       then:
         - regex: local
-        - regex: local
-          then:
           then:
             - script: build-observability-local
-            - script: build-observability-local
-        - regex: remote
         - regex: remote
           then:
-          then:
             - script: build-observability-remote
-            - script: build-observability-remote
+
   build-observability-local:
-  build-observability-local:
-    # for this to work correctly would require to build the application with two maven profiles
-    # for this to work correctly would require to build the application with two maven profiles
+    # for this to work correctly would require to build the application with two maven profiles 
     - log: "WARNING: UPLOADING THE SAME BUILD FOR DIFFERENT TESTS!!"
-    - log: "WARNING: UPLOADING THE SAME BUILD FOR DIFFERENT TESTS!!"
-    - upload: ${{ENV.SCRIPT_DIR}}/quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-extension-benchmark/
-    - upload: ${{ENV.SCRIPT_DIR}}/quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-extension-benchmark/
+    - upload: ${{ENV.SCRIPT_DIR}}/quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-extension-benchmark/ 
     - upload: ${{ENV.SCRIPT_DIR}}/quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-benchmark/
-    - upload: ${{ENV.SCRIPT_DIR}}/quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-benchmark/
-  build-observability-remote:
+
   build-observability-remote:
     - script: sdk-install-maven
-    - script: sdk-install-maven
-    - sh: git clone -q ${{OBSERVABILITY_REPO_URL}} ${{WORKDIR}}/observability-perf-src && git -C ${{WORKDIR}}/observability-perf-src -c advice.detachedHead=false checkout ${{OBSERVABILITY_REPO_COMMIT:main}}
     - sh: git clone -q ${{OBSERVABILITY_REPO_URL}} ${{WORKDIR}}/observability-perf-src && git -C ${{WORKDIR}}/observability-perf-src -c advice.detachedHead=false checkout ${{OBSERVABILITY_REPO_COMMIT:main}}
     - sh: cd ${{WORKDIR}}/observability-perf-src
-    - sh: cd ${{WORKDIR}}/observability-perf-src
-    - sh: mkdir -p ${{WORKDIR}}/observability-perf-src/m2-repo
     - sh: mkdir -p ${{WORKDIR}}/observability-perf-src/m2-repo
     - read-state: ${{QUARKUS_REPO_COMMIT}}
-    - read-state: ${{QUARKUS_REPO_COMMIT}}
-      then:
       then:
         - script: build-custom-quarkus
-        - script: build-custom-quarkus
-        - sh: cd ${{WORKDIR}}/observability-perf-src
         - sh: cd ${{WORKDIR}}/observability-perf-src
         - sh: mvn -B -q versions:set-property -Dproperty=quarkus.platform.version -DnewVersion=${{QUARKUS_VERSION}} -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo
-        - sh: mvn -B -q versions:set-property -Dproperty=quarkus.platform.version -DnewVersion=${{QUARKUS_VERSION}} -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo
     - log: Building observability perf benchmark from source ${{OBSERVABILITY_REPO_URL}} @ ${{OBSERVABILITY_REPO_COMMIT:main}}
-    - log: Building observability perf benchmark from source ${{OBSERVABILITY_REPO_URL}} @ ${{OBSERVABILITY_REPO_COMMIT:main}}
-    - queue-download: observability-perf-maven.txt
+
     - queue-download: observability-perf-maven.txt
     - sh: mvn -B -ntp clean package -DskipTests -Dquarkus.otel.enabled=false -Dquarkus.micrometer.enabled=false -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo | tee observability-perf-maven.txt | grep -e "BUILD SUCCESS"
-    - sh: mvn -B -ntp clean package -DskipTests -Dquarkus.otel.enabled=false -Dquarkus.micrometer.enabled=false -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo | tee observability-perf-maven.txt | grep -e "BUILD SUCCESS"
-      idle-timer: 5m
       idle-timer: 5m
       then:
-      then:
-        - regex: BUILD SUCCESS
         - regex: BUILD SUCCESS
           else:
-          else:
-            - abort: Failed to build observability benchmark
             - abort: Failed to build observability benchmark
     - sh: cp -r quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-benchmark/
-    - sh: cp -r quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-benchmark/
-      then:
       then:
         - regex: No such file or directory
-        - regex: No such file or directory
-          then:
           then:
             - abort: Failed to copy observability benchmark
-            - abort: Failed to copy observability benchmark
-    - queue-download: observability-perf-extension-maven.txt
+
     - queue-download: observability-perf-extension-maven.txt
     - sh: mvn -B -ntp clean package -DskipTests -Dquarkus.otel.enabled=true -Dquarkus.otel.traces.sampler=${{SAMPLER:traceidratio}} -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo | tee observability-perf-extension-maven.txt | grep -e "BUILD SUCCESS"
-    - sh: mvn -B -ntp clean package -DskipTests -Dquarkus.otel.enabled=true -Dquarkus.otel.traces.sampler=${{SAMPLER:traceidratio}} -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo | tee observability-perf-extension-maven.txt | grep -e "BUILD SUCCESS"
-      idle-timer: 5m
       idle-timer: 5m
       then:
-      then:
         - regex: BUILD SUCCESS
-        - regex: BUILD SUCCESS
-          else:
           else:
             - abort: Failed to build observability benchmark
-            - abort: Failed to build observability benchmark
-    - sh: cp -r quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-extension-benchmark/
     - sh: cp -r quarkus-otel-db-perf/target/quarkus-app ${{WORKDIR}}/observability-perf/quarkus-extension-benchmark/
       then:
-      then:
-        - regex: No such file or directory
         - regex: No such file or directory
           then:
-          then:
             - abort: Failed to copy observability benchmark
-            - abort: Failed to copy observability benchmark
-  build-custom-quarkus:
+
   build-custom-quarkus:
     - sh: git clone -q ${{QUARKUS_REPO_URL}} ${{WORKDIR}}/observability-perf-src/custom-quarkus && git -C ${{WORKDIR}}/observability-perf-src/custom-quarkus -c advice.detachedHead=false checkout ${{QUARKUS_REPO_COMMIT}}
-    - sh: git clone -q ${{QUARKUS_REPO_URL}} ${{WORKDIR}}/observability-perf-src/custom-quarkus && git -C ${{WORKDIR}}/observability-perf-src/custom-quarkus -c advice.detachedHead=false checkout ${{QUARKUS_REPO_COMMIT}}
-    - sh: cd ${{WORKDIR}}/observability-perf-src/custom-quarkus
     - sh: cd ${{WORKDIR}}/observability-perf-src/custom-quarkus
     - queue-download: quarkus-maven.txt
-    - queue-download: quarkus-maven.txt
-    - log: Building quarkus from source ${{QUARKUS_REPO_URL}} @ ${{QUARKUS_REPO_COMMIT}}
     - log: Building quarkus from source ${{QUARKUS_REPO_URL}} @ ${{QUARKUS_REPO_COMMIT}}
     - sh: MAVEN_OPTS="-Xmx8g" ./mvnw -ntp -Dquickly -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo | tee quarkus-maven.txt | grep -e "BUILD SUCCESS"
-    - sh: MAVEN_OPTS="-Xmx8g" ./mvnw -ntp -Dquickly -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo | tee quarkus-maven.txt | grep -e "BUILD SUCCESS"
-      idle-timer: 10m
       idle-timer: 10m
       then:
-      then:
-        - regex: BUILD SUCCESS
         - regex: BUILD SUCCESS
           then:
-          then:
-            - sh: ./mvnw -B -q help:evaluate -Dexpression=project.version -DforceStdout -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo
             - sh: ./mvnw -B -q help:evaluate -Dexpression=project.version -DforceStdout -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo
             - set-state: QUARKUS_VERSION
-            - set-state: QUARKUS_VERSION
-          else:
           else:
             - abort: Failed to build Quarkus
-            - abort: Failed to build Quarkus
     - sh: ./mvnw -B -q -pl 'io.quarkus:quarkus-bom-dev-ui,io.quarkus:quarkus-bom,io.quarkus:quarkus-maven-plugin' -am install -P '!validate,!format' -DskipTests -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo
-    - sh: ./mvnw -B -q -pl 'io.quarkus:quarkus-bom-dev-ui,io.quarkus:quarkus-bom,io.quarkus:quarkus-maven-plugin' -am install -P '!validate,!format' -DskipTests -Dmaven.repo.local=${{WORKDIR}}/observability-perf-src/m2-repo
-  cleanup-observability-perf:
+
   cleanup-observability-perf:
     - sh: rm -fr ${{WORKDIR}}/observability-perf-src
-    - sh: rm -fr ${{WORKDIR}}/observability-perf-src
     - sh: rm -fr ${{WORKDIR}}/observability-perf
-    - sh: rm -fr ${{WORKDIR}}/observability-perf
+
   # Tools
-  # Tools
+
   install-sdkman:
-  install-sdkman:
-    # perf_scenarios_param: Added ignore-exit-code to handle missing SDKMAN init file gracefully
-    - sh:
-        command: source ~/.sdkman/bin/sdkman-init.sh
     - sh: source ~/.sdkman/bin/sdkman-init.sh
-        ignore-exit-code: true
-    - regex: No such file or directory
     - regex: No such file or directory
       then:
-      then:
-        # perf_scenarios_param: Added log message to explain SDKMAN reinstallation
-        - log: "SDKMAN init file not found, removing corrupted installation and reinstalling"
-        - sh: rm -rf ~/.sdkman
-        - sh: curl -s https://get.sdkman.io/?rcupdate=false | bash
         - sh: curl -s https://get.sdkman.io/?rcupdate=false | bash
           then:
-          then:
-            - regex: Enjoy|SDKMAN
             - regex: Enjoy|SDKMAN found
               else:
-              else:
-                - abort: Failed to install SDKMAN
                 - abort: Failed to install SDKMAN
         - sh: source ~/.sdkman/bin/sdkman-init.sh
-        - sh: source ~/.sdkman/bin/sdkman-init.sh
-      else:
       else:
         - sh: sdk selfupdate force
-        - sh: sdk selfupdate force
-          then:
           then:
             - regex: Successfully upgraded SDKMAN
-            - regex: Successfully upgraded SDKMAN
-              else:
               else:
                 - abort: Failed to upgrade SDKMAN
-                - abort: Failed to upgrade SDKMAN
-  uninstall-sdkman:
+
   uninstall-sdkman:
     - log: Leaving sdkman installed
-    - log: Leaving sdkman installed
-    # - sh: unset -f sdk
     # - sh: unset -f sdk
     # - sh: rm -fr ~/.sdkman
-    # - sh: rm -fr ~/.sdkman
+
   sdk-select-jdk:
-  sdk-select-jdk:
-    - sh:
     - sh:
         command: sdk install java ${{JAVA_VERSION:21.0.10-tem}}
-        command: sdk install java ${{JAVA_VERSION:21.0.10-tem}}
-        prompt:
         prompt:
           "set as default? (Y/n): ": Y
-          "set as default? (Y/n): ": Y
-    - sh: sdk use java ${{JAVA_VERSION:21.0.10-tem}}
     - sh: sdk use java ${{JAVA_VERSION:21.0.10-tem}}
     - sh: java -version
-    - sh: java -version
+
   sdk-install-maven:
-  sdk-install-maven:
-    # perf_scenarios_param: Added ignore-exit-code to which mvn check to prevent abort when Maven not found
-    - sh:
-        command: which mvn
     - sh: which mvn
-        ignore-exit-code: true
-    - sh:
     - sh:
         command: sdk install maven ${{MAVEN_VERSION:3.9.12}}
-        command: sdk install maven ${{MAVEN_VERSION:3.9.12}}
-        prompt:
         prompt:
           "set as default? (Y/n): ": Y
-          "set as default? (Y/n): ": Y
     - sh: mvn -version
-    - sh: mvn -version
+
   # Hyperfoil setup
-  # Hyperfoil setup
-  get-hyperfoil:
+
   get-hyperfoil:
     - sh: mkdir -p ${{WORKDIR}}/hyperfoil
-    - sh: mkdir -p ${{WORKDIR}}/hyperfoil
-    - sh: cd ${{WORKDIR}}/hyperfoil
     - sh: cd ${{WORKDIR}}/hyperfoil
     - sh: wget -q -nc https://repo1.maven.org/maven2/io/hyperfoil/hyperfoil-distribution/${{HYPERFOIL_VERSION}}/hyperfoil-distribution-${{HYPERFOIL_VERSION}}.zip
-    - sh: wget -q -nc https://repo1.maven.org/maven2/io/hyperfoil/hyperfoil-distribution/${{HYPERFOIL_VERSION}}/hyperfoil-distribution-${{HYPERFOIL_VERSION}}.zip
-    - sh: unzip -q hyperfoil-distribution-${{HYPERFOIL_VERSION}}.zip
     - sh: unzip -q hyperfoil-distribution-${{HYPERFOIL_VERSION}}.zip
     - sh: sed -i 's/^java/taskset --cpu-list ${{HYPERFOIL_CPUS}} &/' hyperfoil-${{HYPERFOIL_VERSION}}/bin/cli.sh
-    - sh: sed -i 's/^java/taskset --cpu-list ${{HYPERFOIL_CPUS}} &/' hyperfoil-${{HYPERFOIL_VERSION}}/bin/cli.sh
+
     - read-state: ${{BUILD_TYPE}}
-    - read-state: ${{BUILD_TYPE}}
-      then:
       then:
         - regex: local
-        - regex: local
-          then:
           then:
             - upload: ${{ENV.SCRIPT_DIR}}/hyperfoil-scripts/quarkus-otel-perf.hf.yaml ${{WORKDIR}}/hyperfoil
-            - upload: ${{ENV.SCRIPT_DIR}}/hyperfoil-scripts/quarkus-otel-perf.hf.yaml ${{WORKDIR}}/hyperfoil
-        - regex: remote
         - regex: remote
           then:
-          then:
             - sh: wget -q -nc ${{OBSERVABILITY_REPO_URL}}/raw/${{OBSERVABILITY_REPO_COMMIT:main}}/hyperfoil-scripts/quarkus-otel-perf.hf.yaml
-            - sh: wget -q -nc ${{OBSERVABILITY_REPO_URL}}/raw/${{OBSERVABILITY_REPO_COMMIT:main}}/hyperfoil-scripts/quarkus-otel-perf.hf.yaml
-  cleanup-hyperfoil:
+
   cleanup-hyperfoil:
     - sh: rm -fr ${{WORKDIR}}/hyperfoil
-    - sh: rm -fr ${{WORKDIR}}/hyperfoil
+
   # Database setup
-  # Database setup
+
   start-container-engine:
-  start-container-engine:
-    # perf_scenarios_param: Added ignore-exit-code to handle systemctl not available in containers
-    - read-state: ${{CONTAINER_ENGINE}}
     - read-state: ${{CONTAINER_ENGINE}}
       then:
-      then:
-        - regex: docker
         - regex: docker
           then:
-          then:
-            - sh:
-                command: systemctl is-active docker
             - sh: systemctl is-active docker
-                ignore-exit-code: true
-            - regex: inactive
             - regex: inactive
               then:
-              then:
-                - sh: sudo systemctl start docker # attempt to start docker daemon
                 - sh: sudo systemctl start docker # attempt to start docker daemon
                 - sh: systemctl is-active docker
-                - sh: systemctl is-active docker
-                - regex: inactive
                 - regex: inactive
                   then:
-                  then:
                     - abort: Failed to start docker daemon
-                    - abort: Failed to start docker daemon
-  start-database:
+
   start-database:
     - sh:
-    - sh:
-        ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{DATABASE_CPUS}} --network host --name observability-perf-postgres
         ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{DATABASE_CPUS}} --network host --name observability-perf-postgres
         --env POSTGRES_DB=test
-        --env POSTGRES_DB=test
-        --env POSTGRES_USER=pguser
         --env POSTGRES_USER=pguser
         --env POSTGRES_PASSWORD=changeit
-        --env POSTGRES_PASSWORD=changeit
         --env PGPORT=5432
-        --env PGPORT=5432
-        docker.io/library/postgres:${{POSTGRES_VERSION:18}}
         postgres:${{POSTGRES_VERSION:18}}
+
   stop-database:
-  stop-database:
-    # perf_scenarios_param: Added ignore-exit-code to handle missing database container gracefully
-    - sh:
     - sh:
         command: ${{CONTAINER_ENGINE}} container ls -a | grep observability-perf-postgres
-        command: ${{CONTAINER_ENGINE}} container ls -a | grep observability-perf-postgres
-        ignore-exit-code: true
         ignore-exit-code: true
     - regex: \w
-    - regex: \w
       then:
-      then:
-        - sh:
-            command: ${{CONTAINER_ENGINE}} container stop observability-perf-postgres
         - sh: ${{CONTAINER_ENGINE}} container stop observability-perf-postgres
-            ignore-exit-code: true
-        - sh:
-            command: ${{CONTAINER_ENGINE}} container rm observability-perf-postgres
         - sh: ${{CONTAINER_ENGINE}} container rm observability-perf-postgres
-            ignore-exit-code: true
+
   # Jaeger setup
-  # Jaeger setup
-  start-jaeger:
+
   start-jaeger:
     - sh: mkdir -p ${{WORKDIR}}/jaeger
-    - sh: mkdir -p ${{WORKDIR}}/jaeger
-    - read-state: ${{BUILD_TYPE}}
     - read-state: ${{BUILD_TYPE}}
       then:
-      then:
-        - regex: local
         - regex: local
           then:
-          then:
-            - upload: ${{ENV.SCRIPT_DIR}}/infra/config.yml ${{WORKDIR}}/jaeger/config.yml
             - upload: ${{ENV.SCRIPT_DIR}}/infra/config.yml ${{WORKDIR}}/jaeger/config.yml
         - regex: remote
-        - regex: remote
           then:
-          then:
-            # perf_scenarios_param: Added ignore-exit-code to handle wget failures gracefully
-            - sh:
-                command: wget -q -O ${{WORKDIR}}/jaeger/config.yml ${{OBSERVABILITY_REPO_URL}}/raw/${{OBSERVABILITY_REPO_COMMIT:main}}/infra/config.yml
             - sh: wget -q -O ${{WORKDIR}}/jaeger/config.yml ${{OBSERVABILITY_REPO_URL}}/raw/${{OBSERVABILITY_REPO_COMMIT:main}}/infra/config.yml
-                ignore-exit-code: true
-            - regex: "."
-              else:
-                - log: "Warning: Failed to download Jaeger config, using default"
-                - sh: echo "receivers:\n  otlp:\n    protocols:\n      grpc:\n      http:\n" > ${{WORKDIR}}/jaeger/config.yml
-    # perf_scenarios_param: Added ignore-exit-code to continue even if Jaeger fails due to UID/GID issues
     - sh:
-    - sh:
-        command: ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{JAEGER_CPUS}} --memory 32g --network host --name observability-perf-jaeger --volume ${{WORKDIR}}/jaeger/config.yml:/etc/jaeger/config.yml --env OTEL_ENABLED=true --env GODEBUG=gctrace=1 cr.jaegertracing.io/jaegertracing/jaeger:${{JAEGER_VERSION:2.17.0}} --config /etc/jaeger/config.yml
         ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{JAEGER_CPUS}} --memory 32g --network host --name observability-perf-jaeger
-        ignore-exit-code: true
         --volume ${{WORKDIR}}/jaeger/config.yml:/etc/jaeger/config.yml
         --env OTEL_ENABLED=true
         --env GODEBUG=gctrace=1
         cr.jaegertracing.io/jaegertracing/jaeger:${{JAEGER_VERSION:2.17.0}}
         --config /etc/jaeger/config.yml
+
   stop-jaeger:
-  stop-jaeger:
-    # perf_scenarios_param: Added ignore-exit-code to handle missing Jaeger container gracefully
-    - sh:
     - sh:
         command: ${{CONTAINER_ENGINE}} container ls -a | grep observability-perf-jaeger
-        command: ${{CONTAINER_ENGINE}} container ls -a | grep observability-perf-jaeger
-        ignore-exit-code: true
         ignore-exit-code: true
     - regex: \w
-    - regex: \w
-      then:
       then:
         - queue-download: observability-perf-jaeger.txt
-        - queue-download: observability-perf-jaeger.txt
-        # perf_scenarios_param: Added ignore-exit-code to docker logs to handle missing container
-        - sh:
-            command: ${{CONTAINER_ENGINE}} logs observability-perf-jaeger > observability-perf-jaeger.txt
         - sh: ${{CONTAINER_ENGINE}} logs observability-perf-jaeger > observability-perf-jaeger.txt
-            ignore-exit-code: true
-        - sh:
-            command: ${{CONTAINER_ENGINE}} container stop observability-perf-jaeger
         - sh: ${{CONTAINER_ENGINE}} container stop observability-perf-jaeger
-            ignore-exit-code: true
-        - sh:
-            command: ${{CONTAINER_ENGINE}} container rm observability-perf-jaeger
         - sh: ${{CONTAINER_ENGINE}} container rm observability-perf-jaeger
 # Benchmark run --------------------------------------------------------------------------------------------------------------
 
