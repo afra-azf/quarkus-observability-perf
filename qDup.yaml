@@ -82,18 +82,12 @@ scripts:
   # Tools
 
   install-sdkman:
-    # perf_scenarios_param: Added ignore-exit-code to handle missing SDKMAN init file gracefully
-    - sh:
-        command: source ~/.sdkman/bin/sdkman-init.sh
-        ignore-exit-code: true
+    - sh: source ~/.sdkman/bin/sdkman-init.sh
     - regex: No such file or directory
       then:
-        # perf_scenarios_param: Added log message to explain SDKMAN reinstallation
-        - log: "SDKMAN init file not found, removing corrupted installation and reinstalling"
-        - sh: rm -rf ~/.sdkman
         - sh: curl -s https://get.sdkman.io/?rcupdate=false | bash
           then:
-            - regex: Enjoy|SDKMAN
+            - regex: Enjoy|SDKMAN found
               else:
                 - abort: Failed to install SDKMAN
         - sh: source ~/.sdkman/bin/sdkman-init.sh
@@ -118,10 +112,7 @@ scripts:
     - sh: java -version
 
   sdk-install-maven:
-    # perf_scenarios_param: Added ignore-exit-code to which mvn check to prevent abort when Maven not found
-    - sh:
-        command: which mvn
-        ignore-exit-code: true
+    - sh: which mvn
     - sh:
         command: sdk install maven ${{MAVEN_VERSION:3.9.12}}
         prompt:
@@ -152,14 +143,11 @@ scripts:
   # Database setup
 
   start-container-engine:
-    # perf_scenarios_param: Added ignore-exit-code to handle systemctl not available in containers
     - read-state: ${{CONTAINER_ENGINE}}
       then:
         - regex: docker
           then:
-            - sh:
-                command: systemctl is-active docker
-                ignore-exit-code: true
+            - sh: systemctl is-active docker
             - regex: inactive
               then:
                 - sh: sudo systemctl start docker # attempt to start docker daemon
@@ -175,21 +163,16 @@ scripts:
         --env POSTGRES_USER=pguser
         --env POSTGRES_PASSWORD=changeit
         --env PGPORT=5432
-        docker.io/library/postgres:${{POSTGRES_VERSION:18}}
+        postgres:${{POSTGRES_VERSION:18}}
 
   stop-database:
-    # perf_scenarios_param: Added ignore-exit-code to handle missing database container gracefully
     - sh:
         command: ${{CONTAINER_ENGINE}} container ls -a | grep observability-perf-postgres
         ignore-exit-code: true
     - regex: \w
       then:
-        - sh:
-            command: ${{CONTAINER_ENGINE}} container stop observability-perf-postgres
-            ignore-exit-code: true
-        - sh:
-            command: ${{CONTAINER_ENGINE}} container rm observability-perf-postgres
-            ignore-exit-code: true
+        - sh: ${{CONTAINER_ENGINE}} container stop observability-perf-postgres
+        - sh: ${{CONTAINER_ENGINE}} container rm observability-perf-postgres
 
   # Jaeger setup
 
@@ -202,37 +185,25 @@ scripts:
             - upload: ${{ENV.SCRIPT_DIR}}/infra/config.yml ${{WORKDIR}}/jaeger/config.yml
         - regex: remote
           then:
-            # perf_scenarios_param: Added ignore-exit-code to handle wget failures gracefully
-            - sh:
-                command: wget -q -O ${{WORKDIR}}/jaeger/config.yml ${{OBSERVABILITY_REPO_URL}}/raw/${{OBSERVABILITY_REPO_COMMIT:main}}/infra/config.yml
-                ignore-exit-code: true
-            - regex: "."
-              else:
-                - log: "Warning: Failed to download Jaeger config, using default"
-                - sh: echo "receivers:\n  otlp:\n    protocols:\n      grpc:\n      http:\n" > ${{WORKDIR}}/jaeger/config.yml
-    # perf_scenarios_param: Added ignore-exit-code to continue even if Jaeger fails due to UID/GID issues
+            - sh: wget -q -O ${{WORKDIR}}/jaeger/config.yml ${{OBSERVABILITY_REPO_URL}}/raw/${{OBSERVABILITY_REPO_COMMIT:main}}/infra/config.yml
     - sh:
-        command: ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{JAEGER_CPUS}} --memory 32g --network host --name observability-perf-jaeger --volume ${{WORKDIR}}/jaeger/config.yml:/etc/jaeger/config.yml --env OTEL_ENABLED=true --env GODEBUG=gctrace=1 cr.jaegertracing.io/jaegertracing/jaeger:${{JAEGER_VERSION:2.17.0}} --config /etc/jaeger/config.yml
-        ignore-exit-code: true
+        ${{CONTAINER_ENGINE}} run --detach --cpuset-cpus ${{JAEGER_CPUS}} --memory 32g --network host --name observability-perf-jaeger
+        --volume ${{WORKDIR}}/jaeger/config.yml:/etc/jaeger/config.yml
+        --env OTEL_ENABLED=true
+        --env GODEBUG=gctrace=1
+        cr.jaegertracing.io/jaegertracing/jaeger:${{JAEGER_VERSION:2.17.0}}
+        --config /etc/jaeger/config.yml
 
   stop-jaeger:
-    # perf_scenarios_param: Added ignore-exit-code to handle missing Jaeger container gracefully
     - sh:
         command: ${{CONTAINER_ENGINE}} container ls -a | grep observability-perf-jaeger
         ignore-exit-code: true
     - regex: \w
       then:
         - queue-download: observability-perf-jaeger.txt
-        # perf_scenarios_param: Added ignore-exit-code to docker logs to handle missing container
-        - sh:
-            command: ${{CONTAINER_ENGINE}} logs observability-perf-jaeger > observability-perf-jaeger.txt
-            ignore-exit-code: true
-        - sh:
-            command: ${{CONTAINER_ENGINE}} container stop observability-perf-jaeger
-            ignore-exit-code: true
-        - sh:
-            command: ${{CONTAINER_ENGINE}} container rm observability-perf-jaeger
-            ignore-exit-code: true
+        - sh: ${{CONTAINER_ENGINE}} logs observability-perf-jaeger > observability-perf-jaeger.txt
+        - sh: ${{CONTAINER_ENGINE}} container stop observability-perf-jaeger
+        - sh: ${{CONTAINER_ENGINE}} container rm observability-perf-jaeger
 # Benchmark run --------------------------------------------------------------------------------------------------------------
 
 # perf_scenarios_param: START - Added PERF_SCENARIOS parameter support for flexible scenario selection
