@@ -233,6 +233,7 @@ scripts:
         - sh:
             command: ${{CONTAINER_ENGINE}} container rm observability-perf-jaeger
             ignore-exit-code: true
+
 # Benchmark run --------------------------------------------------------------------------------------------------------------
 
 # perf_scenarios_param: START - Added PERF_SCENARIOS parameter support for flexible scenario selection
